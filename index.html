@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset='utf-8' />
+    <title>Animate a point along a route</title>
+    <meta name='viewport' content='initial-scale=1,maximum-scale=1,user-scalable=no' />
+    <script src='https://api.tiles.mapbox.com/mapbox-gl-js/v0.46.0/mapbox-gl.js'></script>
+    <link href='https://api.tiles.mapbox.com/mapbox-gl-js/v0.46.0/mapbox-gl.css' rel='stylesheet' />
+    <link href="https://fonts.googleapis.com/css?family=Montserrat" rel="stylesheet">
+    <link href="main.css" rel="stylesheet" />
+</head>
+<body>
+<script src='https://npmcdn.com/@turf/turf/turf.min.js' charset='utf-8'></script>
+<script src='arc.js'></script>
+<!-- Import global js vars -->
+<script src='countryJSON.js'></script>
+<script src='teams.js'></script>
+
+<div id='map'></div>
+<div id="sidebar">
+  <h2 id="title">Pick Your Team</h2>
+  <div id="teams"></div>
+</div>
+
+<script>
+mapboxgl.accessToken = 'pk.eyJ1IjoibWFwc3RlcnRlY2giLCJhIjoiY2poaHk1aDg0MDI0NzMwbnl5OGl0eGg3ZCJ9.fPIgJrmVEyN8Hdvk2EDvXA';
+var map = new mapboxgl.Map({
+    container: 'map',
+    style: 'mapbox://styles/mapbox/streets-v9',
+    center: [-16, 17.8],
+    zoom: 1.5
+});
+
+map.on('load', function() {
+  console.log(map.getSource('composite'))
+
+  map.addSource('players',{
+    type: 'vector',
+    url : 'mapbox://mapstertech.cjimnngax01iu8kpejjozhbjy-468q2'
+  })
+  map.addSource('countries',{
+    type: 'geojson',
+    data: countryJSON
+  })
+
+  var circleFilter = [ 'match', ['get', 'team'] ];
+  teams.forEach(function(team) {
+    circleFilter.push(team.name);
+    circleFilter.push(team.color);
+  });
+  circleFilter.push('#ccc');
+  map.addLayer({
+    "id": "players",
+    "type": "circle",
+    "source":"players",
+    "source-layer":"World_Cup_Players",
+    "paint": {
+        "circle-radius": 3,
+        'circle-color': circleFilter
+    },
+  })
+
+  // var modifiedcountryjson = {"type":"FeatureCollection","features":[]}
+  // countryJSON.features.forEach(function(feature) {
+  //   var found = false;
+  //   teams.forEach(function(team) {
+  //     if(feature.properties.name===team.name) {
+  //       modifiedcountryjson.features.push(feature)
+  //     }
+  //   });
+  // })
+  // console.log(modifiedcountryjson)
+
+  teams.forEach(function(team) {
+    document.getElementById('teams').innerHTML += '<div id="'+team.name+'" class="team-select">'+team.name+'</div>';
+  })
+
+  for(var i = 0; i < document.getElementsByClassName('team-select').length; i++) {
+    document.getElementsByClassName('team-select')[i].onclick = function() {
+      // Remove any active layers if they exist
+
+      if (activePlayerLayers.length > 0) {
+        for (let layerID of activePlayerLayers) {
+          if (map.getLayoutProperty(layerID, 'visibility') === 'visible') {
+            map.setLayoutProperty(layerID, 'visibility', 'none');
+          }
+        }
+      }
+
+      var eleId = this.id;
+      var thisColor = false;
+      teams.forEach(function(team) {
+        if(eleId===team.name) {
+          thisColor = team.color;
+        }
+      }.bind(this));
+      // map.addLayer({
+      //   "id": "country-"+eleId,
+      //   "type": "fill",
+      //   "source":"countries",
+      //   "paint": {
+      //       'fill-color': thisColor,
+      //       'fill-opacity' : 0
+      //   },
+      //   "filter" : ['==','name',eleId]
+      // })
+      var geojsonCountry = map.getSource('countries')._data;
+      var countryFeature;
+      geojsonCountry.features.forEach(function(feature) {
+        if(feature.properties.name===eleId) {
+          countryFeature = feature;
+        }
+      })
+      var countryCentroid = turf.centroid(countryFeature);
+      var countryPlayers = map.querySourceFeatures('players',{
+        sourceLayer : 'World_Cup_Players',
+        filter : ['==', 'team', eleId]
+      });
+
+      countryPlayers.forEach(function(player,index) {
+
+        var generator = new arc.GreatCircle({
+          x: player.geometry.coordinates[0],
+          y: player.geometry.coordinates[1]
+        },{
+          x: countryCentroid.geometry.coordinates[0],
+          y: countryCentroid.geometry.coordinates[1]
+        });
+        var n = 50; // n of points
+        var coords = generator.Arc(n).geometries[0].coords;
+        var layerID = "line-country-"+player.properties.team+'-player-'+index;
+
+        var fixedFeature = {
+          "type" : "Feature",
+          "geometry" : {
+            "type" : "LineString",
+            "coordinates" : coords
+          },
+          "properties" : player.properties
+        }
+
+        var features = {
+          "type" : "FeatureCollection",
+          "features" : [turf.bezierSpline(fixedFeature)]
+        };
+
+        if (map.getLayer(layerID) !== undefined && map.getLayoutProperty(layerID, 'visibility') === 'none') {
+          map.setLayoutProperty(layerID, 'visibility') === 'visible';
+        } else if (map.getLayer(layerID) !== undefined && map.getLayoutProperty(layerID, 'visibility') === 'visible') {
+            map.setLayoutProperty(layerID, 'visibility', 'none');
+        } else {
+          map.addLayer({
+            "id": layerID,
+            "type": "line",
+            "source": {
+              "type": "geojson",
+              "data": features
+            },
+            'layout': {
+                'line-cap': 'round',
+                'line-join': 'round'
+            },
+            'paint': {
+                'line-color': thisColor,
+                'line-width': 1,
+                'line-opacity': .8
+            }
+          })
+          activePlayerLayers.push(layerID)
+        }
+      })
+
+      // var count = 0;
+      // var thisInterval = setInterval(function() {
+      //   map.setPaintProperty('country-'+eleId,'fill-opacity',count)
+      //   count += 0.1;
+      //   if(count===1) {
+      //     clearInterval(thisInteral);
+      //   }
+      // },100)
+    }
+  }
+
+});
+
+
+
+</script>
+
+</body>
+</html>
