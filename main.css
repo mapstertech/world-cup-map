@@ -33,6 +33,10 @@ body {
     justify-content: center;
 }
 
+#teams .eliminated {
+    filter: opacity(.66);
+}
+
 #teams .team-select {
     margin: 0.33em 0.5em;
     background-color: #fff;

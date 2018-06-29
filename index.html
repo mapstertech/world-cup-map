@@ -24,6 +24,7 @@
 
 <script>
 var activePlayerLayers = [];
+var eliminatedTeams = ['Egypt', 'Saudia Arabia', 'Iran', 'Morocco', 'Australia', 'Peru', 'Iceland', 'Nigeria', 'Costa Rica', 'Serbia', 'Germany', 'South Korea', 'Panama', 'Tunisia', 'Senegal', 'Poland'];
 
 mapboxgl.accessToken = 'pk.eyJ1IjoibWFwc3RlcnRlY2giLCJhIjoiY2poaHk1aDg0MDI0NzMwbnl5OGl0eGg3ZCJ9.fPIgJrmVEyN8Hdvk2EDvXA';
 var map = new mapboxgl.Map({
@@ -74,7 +75,13 @@ map.on('load', function() {
   // console.log(modifiedcountryjson)
 
   teams.forEach(function(team) {
-    document.getElementById('teams').innerHTML += '<div id="'+team.name+'" class="team-select">'+team.name+'</div>';
+    let html;
+    if (eliminatedTeams.includes(team.name)) {
+      html = '<div id="'+team.name+'" class="team-select eliminated">'+team.name+'</div>';
+    } else {
+      html = '<div id="'+team.name+'" class="team-select">'+team.name+'</div>';
+    }
+    document.getElementById('teams').innerHTML += html;
   })
 
   for(var i = 0; i < document.getElementsByClassName('team-select').length; i++) {
